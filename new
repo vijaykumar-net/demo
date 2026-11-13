@@ -711,3 +711,208 @@ for epoch in range(num_epochs):
             show_images(G(torch.randn(100, latent_size, device=device)))
 
 print("Training completed.")
+
+
+# Program 9
+
+import sys
+import subprocess
+import importlib.metadata as metadata
+
+OPENCV_VERSION = "4.14.0.94"
+
+OPENCV_PACKAGES = [
+    "opencv-python",
+    "opencv-contrib-python",
+    "opencv-python-headless",
+    "opencv-contrib-python-headless",
+]
+
+
+def setup_opencv():
+    # Check all installed OpenCV package variants
+    installed = {}
+
+    for package in OPENCV_PACKAGES:
+        try:
+            installed[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            pass
+
+    correct_install = (
+        installed == {"opencv-python-headless": OPENCV_VERSION}
+    )
+
+    # If OpenCV was already imported, check whether the old module
+    # is still loaded in the current Python runtime.
+    import sys
+
+    loaded_cv2 = sys.modules.get("cv2")
+    loaded_version = (
+        getattr(loaded_cv2, "__version__", "")
+        if loaded_cv2 is not None
+        else ""
+    )
+
+    if correct_install:
+        if loaded_version and not loaded_version.startswith("4.14.0"):
+            print("OpenCV 4.x is installed, but the old cv2 module is loaded.")
+            print("Restart Runtime → Restart session, then rerun this cell.")
+            return False
+
+        print("Compatible OpenCV version is already installed.")
+        return True
+
+    print("Removing conflicting OpenCV packages...")
+
+    subprocess.run(
+        [
+            sys.executable, "-m", "pip", "uninstall", "-y",
+            *OPENCV_PACKAGES
+        ],
+        check=True
+    )
+
+    print("Installing OpenCV", OPENCV_VERSION, "...")
+
+    subprocess.run(
+        [
+            sys.executable, "-m", "pip", "install",
+            "--no-deps",
+            f"opencv-python-headless=={OPENCV_VERSION}"
+        ],
+        check=True
+    )
+
+    print("\nOpenCV installation completed.")
+    print("NOW select Runtime → Restart session.")
+    print("Then rerun this SAME cell to start face detection.")
+
+    return False
+
+
+def main():
+    if not setup_opencv():
+        return
+
+    # Import OpenCV only after the environment check
+    import os
+    import cv2
+    import urllib.request
+    import base64
+    import io
+    import numpy as np
+
+    from PIL import Image
+    from IPython.display import display, HTML
+    from google.colab import output
+    from google.colab.patches import cv2_imshow
+
+    print("\nOpenCV version:", cv2.__version__)
+    print(
+        "CascadeClassifier available:",
+        hasattr(cv2, "CascadeClassifier")
+    )
+
+    if not hasattr(cv2, "CascadeClassifier"):
+        raise RuntimeError(
+            "CascadeClassifier is missing. Restart the runtime "
+            "and rerun this cell."
+        )
+
+    # --------------------------------------------------------
+    # Download Haar Cascade XML
+    # --------------------------------------------------------
+
+    cascade_path = "/content/haarcascade_frontalface_default.xml"
+
+    cascade_url = (
+        "https://raw.githubusercontent.com/opencv/opencv/4.x/"
+        "data/haarcascades/haarcascade_frontalface_default.xml"
+    )
+
+    if (
+        not os.path.exists(cascade_path)
+        or os.path.getsize(cascade_path) < 1000
+    ):
+        print("Downloading Haar Cascade XML...")
+        urllib.request.urlretrieve(cascade_url, cascade_path)
+
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+
+    if face_cascade.empty():
+        raise RuntimeError(
+            "Could not load Haar Cascade XML. "
+            "Check the downloaded file and internet connection."
+        )
+
+    print("Haar Cascade loaded successfully.")
+
+    # --------------------------------------------------------
+    # Process captured webcam image
+    # --------------------------------------------------------
+
+    def capture_webcam_image(data_url):
+        try:
+            image_data = data_url.split(",", 1)[1]
+            image_bytes = base64.b64decode(image_data)
+
+            # Pillow provides an RGB image
+            rgb_image = np.array(
+                Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            )
+
+            # Convert RGB to BGR for OpenCV
+            frame = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR)
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30)
+            )
+
+            print("Number of faces detected:", len(faces))
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(
+                    frame,
+                    (x, y),
+                    (x + w, y + h),
+                    (0, 255, 0),
+                    2
+                )
+
+            cv2_imshow(frame)
+
+        except Exception as error:
+            print("Face detection error:", repr(error))
+
+    # Register callback for the browser webcam
+    output.register_callback(
+        "notebook.capture_webcam_image",
+        capture_webcam_image
+    )
+
+    # --------------------------------------------------------
+    # Webcam interface
+    # --------------------------------------------------------
+
+    display(HTML("""
+    
+        
+
+        
+
+        
+
+        
+    
+
+    
+    """))
+
+
+main()
