@@ -981,3 +981,6 @@ print(f"Predicted Sentiment: {sentiment} ({prediction:.4f})")
 sentiment = "Positive" if prediction > 0.5 else "Negative"
 print(f"\nSample review: {sample_review}")
 print(f"Predicted Sentiment: {sentiment} ({prediction:.4f})")
+sentiment = "Positive" if prediction > 0.5 else "Negative"
+print(f"\nSample review: {sample_review}")
+print(f"Predicted Sentiment: {sentiment} ({prediction:.4f})")
